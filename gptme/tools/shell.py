@@ -16,7 +16,7 @@ from collections.abc import Generator
 import bashlex
 
 from ..message import Message
-from ..util import ask_execute, print_preview, transform_examples_to_chat_directives
+from ..util import ask_execute, print_preview
 from .base import ToolSpec
 
 logger = logging.getLogger(__name__)
@@ -360,16 +360,14 @@ def split_commands(script: str) -> list[str]:
                     command_parts.append(script[start:end])
                 command = " ".join(command_parts)
                 commands.append(command)
-        elif part.kind == "function":
-            commands.append(script[part.pos[0] : part.pos[1]])
-        elif part.kind == "pipeline":
+        elif part.kind in ["function", "pipeline", "list"]:
             commands.append(script[part.pos[0] : part.pos[1]])
         else:
-            logger.warning(f"Unknown shell script part of kind '{part.kind}', skipping")
+            logger.warning(
+                f"Unknown shell script part of kind '{part.kind}', hoping this works"
+            )
+            commands.append(script[part.pos[0] : part.pos[1]])
     return commands
-
-
-__doc__ += transform_examples_to_chat_directives(examples)
 
 
 tool = ToolSpec(
@@ -380,3 +378,4 @@ tool = ToolSpec(
     execute=execute_shell,
     block_types=["bash", "sh", "shell"],
 )
+__doc__ = tool.get_doc(__doc__)

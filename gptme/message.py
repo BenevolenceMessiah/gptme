@@ -1,4 +1,5 @@
 import base64
+import builtins
 import io
 import logging
 import shutil
@@ -15,8 +16,9 @@ from rich.syntax import Syntax
 from tomlkit._utils import escape_string
 from typing_extensions import Self
 
+from .codeblock import Codeblock
 from .constants import ROLE_COLOR
-from .util import extract_codeblocks, get_tokenizer
+from .util import get_tokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,7 @@ class Message:
         # This is not persisted to the log file.
         self.quiet = quiet
         # Files attached to the message, could e.g. be images for vision.
-        self.files = (
+        self.files: list[Path] = (
             [Path(f) if isinstance(f, str) else f for f in files] if files else []
         )
 
@@ -122,12 +124,12 @@ class Message:
     def to_dict(self, keys=None, openai=False, anthropic=False) -> dict:
         """Return a dict representation of the message, serializable to JSON."""
         content: str | list[dict[str, Any]]
-        if not anthropic and not openai:
-            # storage/wire format should keep the content as a string
-            content = self.content
-        else:
+        if anthropic or openai:
             # OpenAI format or Anthropic format should include files in the content
             content = self._content_files_list(openai=openai, anthropic=anthropic)
+        else:
+            # storage/wire format should keep the content as a string
+            content = self.content
 
         d = {
             "role": self.role,
@@ -187,9 +189,9 @@ timestamp = "{self.timestamp.isoformat()}"
             timestamp=datetime.fromisoformat(msg["timestamp"]),
         )
 
-    def get_codeblocks(self) -> list[tuple[str, str]]:
+    def get_codeblocks(self) -> list[Codeblock]:
         """
-        Get all codeblocks from the message content, as a list of tuples (lang, content).
+        Get all codeblocks from the message content.
         """
         content_str = self.content
 
@@ -202,7 +204,7 @@ timestamp = "{self.timestamp.isoformat()}"
         if backtick_count < 2:
             return []
 
-        return extract_codeblocks(content_str)
+        return Codeblock.iter_from_markdown(content_str)
 
 
 def format_msgs(
@@ -264,7 +266,11 @@ def print_msg(
         if m.hide and not show_hidden:
             skipped_hidden += 1
             continue
-        print(s)
+        try:
+            print(s)
+        except Exception:
+            # rich can throw errors, if so then print the raw message
+            builtins.print(s)
     if skipped_hidden:
         print(
             f"[grey30]Skipped {skipped_hidden} hidden system messages, show with --show-hidden[/]"

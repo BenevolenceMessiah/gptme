@@ -13,7 +13,7 @@ from collections.abc import Generator
 from time import sleep
 
 from ..message import Message
-from ..util import ask_execute, print_preview, transform_examples_to_chat_directives
+from ..util import ask_execute, print_preview
 from .base import ToolSpec
 
 logger = logging.getLogger(__name__)
@@ -68,6 +68,17 @@ def new_session(command: str) -> Message:
     )
     assert result.returncode == 0
     print(result.stdout, result.stderr)
+
+    # set session size
+    cmd = ["tmux", "resize-window", "-t", session_id, "-x", "120", "-y", "40"]
+    print(" ".join(cmd))
+    result = subprocess.run(
+        " ".join(cmd),
+        check=True,
+        capture_output=True,
+        text=True,
+        shell=True,
+    )
 
     cmd = ["tmux", "send-keys", "-t", session_id, command, "Enter"]
     print(" ".join(cmd))
@@ -200,7 +211,7 @@ System: Running `npm run dev` in session 0
 
 User: Can you show me the current content of the pane?
 Assistant: Of course! Let's inspect the pane content:
-```terminal
+```tmux
 inspect_pane 0
 ```
 System:
@@ -210,7 +221,7 @@ Server is running on localhost:5600
 
 User: Stop the dev server
 Assistant: I'll send 'Ctrl+C' to the pane to stop the server:
-```terminal
+```tmux
 send_keys 0 C-c
 ```
 System: Sent 'C-c' to pane 0
@@ -225,8 +236,8 @@ Assistant: The load is...
 
 #### Background process
 User: Start the dev server
-Assistant: Certainly! To start the dev server we should use the terminal tool to run it in a tmux session:
-```terminal
+Assistant: Certainly! To start the dev server we should use the tmux tool to run it in a tmux session:
+```tmux
 new_session 'npm run dev'
 ```
 
@@ -249,20 +260,16 @@ Scaffolding project in ./fancy-project...
 #### Ending a session
 User: I changed my mind
 Assistant: No problem! Let's kill the session and start over:
-```terminal
+```tmux
 list_sessions
 ```
 System: Active tmux sessions [0]
 Assistant:
-```terminal
+```tmux
 kill_session 0
 ```
 System: Killed tmux session with ID 0
 """
-
-
-new_examples = transform_examples_to_chat_directives(examples)
-__doc__ += new_examples
 
 
 tool = ToolSpec(
@@ -275,3 +282,4 @@ tool = ToolSpec(
     block_types=["tmux"],
     available=shutil.which("tmux") is not None,
 )
+__doc__ = tool.get_doc(__doc__)

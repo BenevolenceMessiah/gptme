@@ -11,11 +11,12 @@ from typing import Any, Literal, TypeAlias
 
 from rich import print
 
+from .codeblock import Codeblock
 from .constants import CMDFIX
 from .dirs import get_logs_dir
 from .message import Message, len_tokens, print_msg
 from .prompts import get_prompt
-from .tools.reduce import limit_log, reduce_log
+from .reduce import limit_log, reduce_log
 
 PathLike: TypeAlias = str | Path
 
@@ -215,11 +216,11 @@ class LogManager:
             msgs = initial_msgs
         return cls(msgs, logdir=logdir, branch=branch, **kwargs)
 
-    def get_last_code_block(
+    def get_last_codeblock(
         self,
         role: RoleLiteral | None = None,
         history: int | None = None,
-    ) -> tuple[str, str] | None:
+    ) -> Codeblock | None:
         """Returns the last code block in the log, if any.
 
         If `role` set, only check that role.

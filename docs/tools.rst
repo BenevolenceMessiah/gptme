@@ -9,7 +9,7 @@ The main tools can be grouped in the following categories:
 
   - :ref:`Shell`
   - :ref:`Python`
-  - :ref:`Terminal`
+  - :ref:`Tmux`
 
 - filesystem
 
@@ -22,10 +22,7 @@ The main tools can be grouped in the following categories:
 
 - chat management
 
-  - :ref:`Edit`
-  - :ref:`Reduce`
-  - :ref:`Context`
-  - :ref:`Summarize`
+  - :ref:`Chats`
 
 Shell
 -----
@@ -69,31 +66,9 @@ Browser
     :members:
     :noindex:
 
-Edit
-----
+Chats
+-----
 
-.. automodule:: gptme.tools.useredit
+.. automodule:: gptme.tools.chats
     :members:
     :noindex:
-
-Reduce
-------
-
-.. automodule:: gptme.tools.reduce
-    :members:
-    :noindex:
-
-Context
--------
-
-.. automodule:: gptme.tools.context
-    :members:
-    :noindex:
-
-Summarize
----------
-
-.. automodule:: gptme.tools.summarize
-    :members:
-    :noindex:
-

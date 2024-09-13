@@ -4,18 +4,23 @@ The assistant can execute Python code blocks.
 It uses IPython to do so, and persists the IPython instance between calls to give a REPL-like experience.
 """
 
+import dataclasses
 import functools
 import re
+import types
 from collections.abc import Callable, Generator
 from logging import getLogger
 from typing import Literal, TypeVar, get_origin
 
 from ..message import Message
-from ..util import ask_execute, print_preview, transform_examples_to_chat_directives
+from ..util import ask_execute, print_preview
 from .base import ToolSpec
 
 logger = getLogger(__name__)
 
+# TODO: launch the IPython session in the current venv, if any, instead of the pipx-managed gptme-python venv (for example) in which gptme itself runs
+#       would let us use libraries installed with `pip install` in the current venv
+#       https://github.com/ErikBjare/gptme/issues/29
 
 # IPython instance
 _ipython = None
@@ -36,10 +41,14 @@ def register_function(func: T) -> T:
     return func
 
 
+# TODO: there must be a better way?
 def derive_type(t) -> str:
     if get_origin(t) == Literal:
         v = ", ".join(f'"{a}"' for a in t.__args__)
         return f"Literal[{v}]"
+    elif get_origin(t) == types.UnionType:
+        v = ", ".join(derive_type(a) for a in t.__args__)
+        return f"Union[{v}]"
     else:
         return t.__name__
 
@@ -180,16 +189,35 @@ System: Executed code block.
 ```
 """.strip()
 
-__doc__ += transform_examples_to_chat_directives(examples)
+
+instructions = """
+When you send a message containing Python code (and is not a file block), it will be executed in a stateful environment.
+Python will respond with the output of the execution.
+"""
+
+
+# only used for doc generation, use get_tool() in the code
+tool = ToolSpec(
+    name="python",
+    desc="Execute Python code",
+    instructions=instructions,
+    examples=examples,
+    init=init_python,
+    execute=execute_python,
+    block_types=[
+        "python",
+        "ipython",
+        "py",
+    ],
+)
+__doc__ = tool.get_doc(__doc__)
 
 
 def get_tool() -> ToolSpec:
     python_libraries = get_installed_python_libraries()
     python_libraries_str = "\n".join(f"- {lib}" for lib in python_libraries)
 
-    instructions = f"""
-When you send a message containing Python code (and is not a file block), it will be executed in a stateful environment.
-Python will respond with the output of the execution.
+    _instructions = f"""{instructions}
 
 The following libraries are available:
 {python_libraries_str}
@@ -198,15 +226,5 @@ The following functions are available in the REPL:
 {get_functions_prompt()}
     """.strip()
 
-    return ToolSpec(
-        name="python",
-        desc="Execute Python code",
-        instructions=instructions,
-        examples=examples,
-        init=init_python,
-        execute=execute_python,
-        block_types=[
-            "python",
-            "ipython",
-        ],  # ideally, models should use `ipython` and not `python`, but they don't
-    )
+    # create a copy with the updated instructions
+    return dataclasses.replace(tool, instructions=_instructions)

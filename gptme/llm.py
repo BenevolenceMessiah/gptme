@@ -2,10 +2,12 @@ import logging
 import shutil
 import sys
 from collections.abc import Iterator
+from functools import lru_cache
 from typing import Literal
 
 from rich import print
 
+from .codeblock import Codeblock
 from .config import get_config
 from .constants import PROMPT_ASSISTANT
 from .llm_anthropic import chat as chat_anthropic
@@ -16,9 +18,8 @@ from .llm_openai import chat as chat_openai
 from .llm_openai import get_client as get_openai_client
 from .llm_openai import init as init_openai
 from .llm_openai import stream as stream_openai
-from .message import Message, len_tokens
+from .message import Message, format_msgs, len_tokens
 from .models import MODELS, get_summary_model
-from .util import extract_codeblocks
 
 logger = logging.getLogger(__name__)
 
@@ -92,13 +93,13 @@ def _reply_stream(messages: list[Message], model: str) -> Message:
             sys.stdout.flush()
 
             # pause inference on finished code-block, letting user run the command before continuing
-            if codeblocks := extract_codeblocks(output):
-                lang, _ = codeblocks[0]
+            if codeblocks := Codeblock.iter_from_markdown(output):
+                codeblock = codeblocks[0]
                 # noreorder
-                from .tools import is_supported_codeblock_tool  # fmt: skip
+                from .tools import is_supported_langtag  # fmt: skip
 
                 # if closing a code block supported by tools, abort generation to let them run
-                if is_supported_codeblock_tool(lang):
+                if is_supported_langtag(codeblock.lang):
                     print("\nFound codeblock, breaking")
                     break
     except KeyboardInterrupt:
@@ -125,7 +126,7 @@ def _client_to_provider() -> Provider:
         raise ValueError("Unknown client type")
 
 
-def summarize(content: str) -> str:
+def _summarize_str(content: str) -> str:
     """
     Summarizes a long text using a LLM.
 
@@ -186,3 +187,37 @@ IMPORTANT: output only the name, no preamble or postamble.
     )
     name = _chat_complete(msgs, model=get_summary_model(_client_to_provider())).strip()
     return name
+
+
+def summarize(msg: str | Message | list[Message]) -> Message:
+    """Uses a cheap LLM to summarize long outputs."""
+    # construct plaintext from message(s)
+    if isinstance(msg, str):
+        content = msg
+    elif isinstance(msg, Message):
+        content = msg.content
+    else:
+        content = "\n".join(format_msgs(msg))
+
+    logger.info(f"{content[:200]=}")
+    summary = _summarize_helper(content)
+    logger.info(f"{summary[:200]=}")
+
+    # construct message from summary
+    content = f"Here's a summary of the conversation:\n{summary}"
+    return Message(role="system", content=content)
+
+
+@lru_cache(maxsize=128)
+def _summarize_helper(s: str, tok_max_start=400, tok_max_end=400) -> str:
+    """
+    Helper function for summarizing long outputs.
+    Truncates long outputs, then summarizes.
+    """
+    if len_tokens(s) > tok_max_start + tok_max_end:
+        beginning = " ".join(s.split()[:tok_max_start])
+        end = " ".join(s.split()[-tok_max_end:])
+        summary = _summarize_str(beginning + "\n...\n" + end)
+    else:
+        summary = _summarize_str(s)
+    return summary
