@@ -6,8 +6,6 @@ from time import sleep
 from typing import Literal
 
 from . import llm
-from .codeblock import Codeblock
-from .constants import CMDFIX
 from .logmanager import LogManager
 from .message import (
     Message,
@@ -17,12 +15,7 @@ from .message import (
     toml_to_msgs,
 )
 from .models import get_model
-from .tools import (
-    execute_codeblock,
-    execute_msg,
-    is_supported_langtag,
-    loaded_tools,
-)
+from .tools import ToolUse, execute_msg, loaded_tools
 from .useredit import edit_text_with_editor
 from .util import ask_execute
 
@@ -78,7 +71,7 @@ def handle_cmd(
     cmd: str, log: LogManager, no_confirm: bool
 ) -> Generator[Message, None, None]:
     """Handles a command."""
-    cmd = cmd.lstrip(CMDFIX)
+    cmd = cmd.lstrip("/")
     logger.debug(f"Executing command: {cmd}")
     name, *args = re.split(r"[\n\s]", cmd)
     full_args = cmd.split(" ", 1)[1] if " " in cmd else ""
@@ -114,6 +107,8 @@ def handle_cmd(
             n = int(args[0]) if args and args[0].isdigit() else 1
             log.undo(n)
         case "exit":
+            log.undo(1, quiet=True)
+            log.write()
             sys.exit(0)
         case "replay":
             log.undo(1, quiet=True)
@@ -149,17 +144,17 @@ def handle_cmd(
                 )
         case _:
             # the case for python, shell, and other block_types supported by tools
-            if is_supported_langtag(name):
-                yield from execute_codeblock(
-                    Codeblock(name, full_args), ask=not no_confirm
-                )
+            tooluse = ToolUse(name, [], full_args)
+            if tooluse.is_runnable:
+                yield from tooluse.execute(ask=not no_confirm)
             else:
-                if log.log[-1].content != f"{CMDFIX}help":
+                if log.log[-1].content.strip() == "/help":
+                    # undo the '/help' command itself
+                    log.undo(1, quiet=True)
+                    log.write()
+                    help()
+                else:
                     print("Unknown command")
-                # undo the '/help' command itself
-                log.undo(1, quiet=True)
-                log.write()
-                help()
 
 
 def edit(log: LogManager) -> Generator[Message, None, None]:  # pragma: no cover

@@ -8,15 +8,17 @@ See here for instructions how to serve matplotlib figures:
 import atexit
 import io
 from contextlib import redirect_stdout
+from datetime import datetime
 from importlib import resources
+from itertools import islice
 
 import flask
-from flask import current_app
+from flask import current_app, request
 
 from ..commands import execute_cmd
 from ..dirs import get_logs_dir
 from ..llm import reply
-from ..logmanager import LogManager, get_conversations
+from ..logmanager import LogManager, get_user_conversations
 from ..message import Message
 from ..models import get_model
 from ..tools import execute_msg
@@ -31,7 +33,8 @@ def api_root():
 
 @api.route("/api/conversations")
 def api_conversations():
-    conversations = list(get_conversations())
+    limit = int(request.args.get("limit", 100))
+    conversations = list(islice(get_user_conversations(), limit))
     return flask.jsonify(conversations)
 
 
@@ -49,9 +52,8 @@ def api_conversation_put(logfile: str):
     req_json = flask.request.json
     if req_json and "messages" in req_json:
         for msg in req_json["messages"]:
-            msgs.append(
-                Message(msg["role"], msg["content"], timestamp=msg["timestamp"])
-            )
+            timestamp: datetime = datetime.fromisoformat(msg["timestamp"])
+            msgs.append(Message(msg["role"], msg["content"], timestamp=timestamp))
 
     logdir = get_logs_dir() / logfile
     if logdir.exists():
@@ -113,7 +115,7 @@ def api_conversation_generate(logfile: str):
     # generate response
     # TODO: add support for streaming
     msg = reply(msgs, model=model, stream=True)
-    msg.quiet = True
+    msg = msg.replace(quiet=True)
 
     # log response and run tools
     resp_msgs = []
@@ -129,7 +131,9 @@ def api_conversation_generate(logfile: str):
 
 
 gptme_path_ctx = resources.as_file(resources.files("gptme"))
-static_path = gptme_path_ctx.__enter__().parent / "static"
+root_path = gptme_path_ctx.__enter__()
+static_path = root_path / "server" / "static"
+media_path = root_path.parent / "media"
 atexit.register(gptme_path_ctx.__exit__, None, None, None)
 
 
@@ -141,7 +145,7 @@ def root():
 
 @api.route("/favicon.png")
 def favicon():
-    return flask.send_from_directory(static_path.parent / "media", "logo.png")
+    return flask.send_from_directory(media_path, "logo.png")
 
 
 def create_app() -> flask.Flask:
@@ -149,9 +153,3 @@ def create_app() -> flask.Flask:
     app = flask.Flask(__name__, static_folder=static_path)
     app.register_blueprint(api)
     return app
-
-
-def main() -> None:
-    """Run the Flask app."""
-    app = create_app()
-    app.run(debug=True)

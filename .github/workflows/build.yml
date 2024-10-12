@@ -24,13 +24,13 @@ jobs:
         os: [ubuntu-latest]
         python_version: ['3.10']
         extras: ['-E all']
-        model: ['openai', 'anthropic']
+        model: ['openai/gpt-4o-mini', 'anthropic/claude-3-haiku-20240307']
     steps:
     - uses: actions/checkout@v3
       with:
         submodules: 'recursive'
     - name: Install apt dependencies
-      run: sudo apt install universal-ctags pandoc tmux
+      run: sudo apt-get install universal-ctags pandoc tmux
     - name: Install poetry
       run: |
         pipx install poetry
@@ -104,7 +104,7 @@ jobs:
       uses: docker/build-push-action@v3
       with:
         tags: gptme:latest
-        file: ./Dockerfile
+        file: ./scripts/Dockerfile
         context: .
         push: false
 
@@ -115,20 +115,35 @@ jobs:
         tags: |
           ghcr.io/${{ env.OWNER_LC }}/gptme:latest
           ghcr.io/${{ env.OWNER_LC }}/gptme:${{ env.SANITIZED_REF_NAME }}
-        file: ./Dockerfile
+        file: ./scripts/Dockerfile
         context: .
         push: true
 
-    # Now the eval image
+    # Now the base eval image
     - name: Build and push Docker image (eval)
       uses: docker/build-push-action@v3
       with:
         tags: |
           ghcr.io/${{ env.OWNER_LC }}/gptme-eval:latest
           ghcr.io/${{ env.OWNER_LC }}/gptme-eval:${{ env.SANITIZED_REF_NAME }}
-        file: ./Dockerfile.eval
+        file: ./scripts/Dockerfile.eval
         context: .
         push: true
+
+    # Now the full eval image
+    # NOTE: takes a long time and leads to a big (1GB+) image
+    #- name: Build and push Docker image (eval-full)
+    #  uses: docker/build-push-action@v3
+    #  with:
+    #    tags: |
+    #      ghcr.io/${{ env.OWNER_LC }}/gptme-eval-full:latest
+    #      ghcr.io/${{ env.OWNER_LC }}/gptme-eval-full:${{ env.SANITIZED_REF_NAME }}
+    #    file: ./scripts/Dockerfile.eval
+    #    context: .
+    #    push: true
+    #    build-args: |
+    #      RUST=yes
+    #      BROWSER=yes
 
   lint:
     runs-on: ubuntu-latest

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./media/logo.png" width=150 />
+  <img src="https://gptme.org/media/logo.png" width=150 />
 </p>
 
 <h1 align="center">gptme</h1>
@@ -10,11 +10,11 @@
 
 <!-- Links -->
 <p align="center">
-  <a href="https://erik.bjareholt.com/gptme/docs/getting-started.html">Getting Started</a>
+  <a href="https://gptme.org/docs/getting-started.html">Getting Started</a>
   •
-  <a href="https://erik.bjareholt.com/gptme/">Website</a>
+  <a href="https://gptme.org/">Website</a>
   •
-  <a href="https://erik.bjareholt.com/gptme/docs/">Documentation</a>
+  <a href="https://gptme.org/docs/">Documentation</a>
 </p>
 
 <!-- Badges -->
@@ -29,14 +29,14 @@
     <img src="https://codecov.io/gh/ErikBjare/gptme/graph/badge.svg?token=DYAYJ8EF41" alt="Codecov" />
   </a>
   <br>
-  <a href="https://pypi.org/project/gptme-python/">
-    <img src="https://img.shields.io/pypi/v/gptme-python" alt="PyPI version" />
+  <a href="https://pypi.org/project/gptme/">
+    <img src="https://img.shields.io/pypi/v/gptme" alt="PyPI version" />
   </a>
-  <a href="https://pepy.tech/project/gptme-python">
-    <img src="https://static.pepy.tech/badge/gptme-python" alt="Downloads all-time" />
+  <a href="https://pepy.tech/project/gptme">
+    <img src="https://img.shields.io/pepy/dt/gptme" alt="PyPI - Downloads all-time" />
   </a>
-  <a href="https://pepy.tech/project/gptme-python/week">
-    <img src="https://static.pepy.tech/badge/gptme-python/week" alt="Downloads per week" />
+  <a href="https://pypistats.org/packages/gptme">
+    <img src="https://img.shields.io/pypi/dd/gptme?color=success" alt="PyPI - Downloads per day" />
   </a>
   <br>
   <a href="https://discord.gg/NMaCmmkxWv">
@@ -47,10 +47,23 @@
   </a>
 </p>
 
+<p align="center">
+📜 Personal AI assistant in your terminal, with tools so it can:<br/>Use the terminal, run code, edit files, browse the web, use vision, and much more;<br/>Assists in all kinds of knowledge-work, especially programming, from a simple but powerful CLI.
+</p>
 
-📜 Interact with an LLM assistant directly in your terminal in a Chat-style interface. With tools so the assistant can run shell commands, execute code, read/write files, and more, enabling them to assist in all kinds of development and terminal-based work.
+<p align="center">
+An unconstrained local alternative to ChatGPT's "Code Interpreter".<br/>Not limited by lack of software, internet access, timeouts, or privacy concerns (if using local models).
+</p>
 
-A local alternative to ChatGPT's "Code Interpreter" that is not constrained by lack of software, internet access, timeouts, or privacy concerns (if local models are used).
+## 📚 Table of Contents
+
+- 🎥 [Demos](#-demos)
+- 🌟 [Features](#-features)
+- 🚀 [Getting Started](#-getting-started)
+- 🛠 [Usage](#-usage)
+- 📊 [Stats](#-stats)
+- 💻 [Development](#-development)
+- 🔗 [Links](#-links)
 
 ## 🎥 Demos
 
@@ -59,13 +72,13 @@ A local alternative to ChatGPT's "Code Interpreter" that is not constrained by l
 
 <table>
   <tr>
-    <th>Fibonacci (old)</th>  
+    <th>Fibonacci (old)</th>
     <th>Snake with curses</th>
   </tr>
   <tr>
     <td width="50%">
-    
-[![demo screencast with asciinema](https://github.com/ErikBjare/gptme/assets/1405370/5dda4240-bb7d-4cfa-8dd1-cd1218ccf571)](https://asciinema.org/a/606375)    
+
+[![demo screencast with asciinema](https://github.com/ErikBjare/gptme/assets/1405370/5dda4240-bb7d-4cfa-8dd1-cd1218ccf571)](https://asciinema.org/a/606375)
 
   <details>
   <summary>Steps</summary>
@@ -93,7 +106,6 @@ A local alternative to ChatGPT's "Code Interpreter" that is not constrained by l
     <li> Finished game with green snake and red apple pie!
   </ol>
   </details>
-    
   </td>
 </tr>
 
@@ -103,7 +115,7 @@ A local alternative to ChatGPT's "Code Interpreter" that is not constrained by l
 </tr>
 <tr>
   <td width="50%">
-    
+
 [![mandelbrot-curses](https://github.com/ErikBjare/gptme/assets/1405370/570860ac-80bd-4b21-b8d1-da187d7c1a95)](https://asciinema.org/a/621991)
 
   <details>
@@ -129,52 +141,51 @@ A local alternative to ChatGPT's "Code Interpreter" that is not constrained by l
     <li> gptme browses the website, and answers correctly
   </ol>
   </details>
-    
   </td>
   </tr>
 </table>
 
-You can find more demos on the [Demos page](https://erik.bjareholt.com/gptme/docs/demos.html) in the docs.
+You can find more [Demos][docs-demos] and [Examples][docs-examples] in the [documentation][docs].
 
 ## 🌟 Features
 
 - 💻 Code execution
-  - Executes code in your local environment with bash and IPython tools.
+  - Executes code in your local environment with the [shell][docs-tools-shell] and [python][docs-tools-python] tools.
 - 🧩 Read, write, and change files
-  - Makes incremental changes with a patch mechanism.
+  - Makes incremental changes with the [patch][docs-tools-patch] tool. 
 - 🌐 Search and browse the web.
-  - Equipped with a browser via Playwright.
+  - Can use a browser via Playwright with the [browser][docs-tools-browser] tool.
 - 👀 Vision
-  - Can see images whose paths are referenced in prompts.
+  - Can see images referenced in prompts, screenshots of your desktop, and web pages.
 - 🔄 Self-correcting
   - Output is fed back to the assistant, allowing it to respond and self-correct.
-- 🤖 Support for several LLM providers
+- 🤖 Support for several LLM [providers][docs-providers]
   - Use OpenAI, Anthropic, OpenRouter, or serve locally with `llama.cpp`
 - ✨ Many smaller features to ensure a great experience
+  - 🚰 Pipe in context via `stdin` or as arguments.
+    - Passing a filename as an argument will read the file and include it as context.
   - → Tab completion
   - 📝 Automatic naming of conversations
-  - 🚰 Pipe in context via stdin or as arguments.
-    - Passing a filename as an argument will read the file and include it as context.
-  - 💬 Optional basic Web UI and REST API
+  - 💬 Optional basic [Web UI and REST API][docs-server]
 
 ### 🛠  Developer perks
 
 - 🧰 Easy to extend
-  - Most functionality is implemented as [tools](https://erik.bjareholt.com/gptme/docs/tools.html), making it easy to add new features.
+  - Most functionality is implemented as [tools][docs-tools], making it easy to add new features.
 - 🧪 Extensive testing, high coverage.
 - 🧹 Clean codebase, checked and formatted with `mypy`, `ruff`, and `pyupgrade`.
-- 🤖 GitHub Bot to request changes from comments! (see [#16](https://github.com/ErikBjare/gptme/issues/16))
+- 🤖 [GitHub Bot][docs-bot] to request changes from comments! (see [#16](https://github.com/ErikBjare/gptme/issues/16))
   - Operates in this repo! (see [#18](https://github.com/ErikBjare/gptme/issues/18) for example)
   - Runs entirely in GitHub Actions.
+- 📊 [Evaluation suite][docs-evals] for testing capabilities of different models
 
 ### 🚧 In progress
 
-- 📝 Handle long contexts intelligently through summarization, truncation, pinning, and subagents.
-- 🌐 Interact with and automate the web.
+- 🏆 Advanced evals for testing frontier capabilities
+- 🤖 Long-running agents and advanced agent architectures
 - 🌳 Tree-based conversation structure (see [#17](https://github.com/ErikBjare/gptme/issues/17))
-- 👀 Vision for web and desktop (see [#50](https://github.com/ErikBjare/gptme/issues/50))
 
-## 🛠 Use Cases
+### 🛠 Use Cases
 
 - 🎯 **Shell Copilot:** Figure out the right shell command using natural language (no more memorizing flags!).
 - 🖥 **Development:** Write, test, and run code with AI assistance.
@@ -182,18 +193,14 @@ You can find more demos on the [Demos page](https://erik.bjareholt.com/gptme/doc
 - 🎓 **Learning & Prototyping:** Experiment with new libraries and frameworks on-the-fly.
 - 🤖 **Agents & Tools:** Experiment with agents and tools in a local environment.
 
+
 ## 🚀 Getting Started
 
-Install from pip:
+Install with pipx:
 
 ```sh
-pip install gptme-python   # requires Python 3.10+
-```
-
-Or from source:
-```sh
-git clone https://github.com/ErikBjare/gptme
-poetry install  # or: pip install .
+# requires Python 3.10+
+pipx install gptme
 ```
 
 Now, to get started, run:
@@ -202,31 +209,19 @@ Now, to get started, run:
 gptme
 ```
 
-> [!NOTE]
-> The first time you run gptme, it will ask for an API key for a supported provider ([OpenAI](https://platform.openai.com/account/api-keys), [Anthropic](https://console.anthropic.com/settings/keys), [OpenRouter](https://openrouter.ai/settings/keys)), if not already set as an environment variable or in the config.
+Here are some examples:
 
-For more, see the [Getting Started guide](https://erik.bjareholt.com/gptme/docs/getting-started.html) in the documentation.
-
-## 🌐 Web UI
-
-> [!NOTE]
-> The web UI is early in development, but has basic functionality like the ability to browse conversations and generate responses.
-
-To serve the web UI, you need to install gptme with server extras:
 ```sh
-pip install gptme-python[server]
+gptme 'write an impressive and colorful particle effect using three.js to particles.html'
+gptme 'render mandelbrot set to mandelbrot.png'
+gptme 'suggest improvements to my vimrc'
+gptme 'convert to h265 and adjust the volume' video.mp4
+git diff | gptme 'complete the TODOs in this diff'
+make test | gptme 'fix the failing tests'
 ```
 
-Then, you can run it with:
-```sh
-gptme-server
-```
+For more, see the [Getting Started][docs-getting-started] guide and the [Examples][docs-examples] in the [documentation][docs].
 
-And browse to http://localhost:5000/ to see the web UI.
-
-## 📚 Documentation
-
-For more information, see the [documentation](https://erikbjare.github.io/gptme/docs/).
 
 
 ## 🛠 Usage
@@ -235,12 +230,11 @@ For more information, see the [documentation](https://erikbjare.github.io/gptme/
 $ gptme --help
 Usage: gptme [OPTIONS] [PROMPTS]...
 
-  GPTMe, a chat-CLI for LLMs, enabling them to execute commands and code.
+  gptme is a chat-CLI for LLMs, empowering them with tools to run shell
+  commands, execute code, read and manipulate files, and more.
 
-  If PROMPTS are provided, a new conversation will be started with it.
-
-  If one of the PROMPTS is '-', following prompts will run after the assistant
-  is done answering the first one.
+  If PROMPTS are provided, a new conversation will be started with it. PROMPTS
+  can be chained with the '-' separator.
 
   The interface provides user commands that can be used to interact with the
   system.
@@ -260,28 +254,23 @@ Usage: gptme [OPTIONS] [PROMPTS]...
     /exit         Exit the program
 
 Options:
-  --prompt-system TEXT            System prompt. Can be 'full', 'short', or
-                                  something custom.
-  --name TEXT                     Name of conversation. Defaults to generating
-                                  a random name. Pass 'ask' to be prompted for
-                                  a name.
-  --model TEXT                    Model to use, e.g. openai/gpt-4-turbo,
-                                  anthropic/claude-3-5-sonnet-20240620. If
-                                  only provider is given, the default model
-                                  for that provider is used.
-  --stream / --no-stream          Stream responses
-  -v, --verbose                   Verbose output.
-  -y, --no-confirm                Skips all confirmation prompts.
-  -i, --interactive / -n, --non-interactive
-                                  Choose interactive mode, or not. Non-
-                                  interactive implies --no-confirm, and is
-                                  used in testing.
-  --show-hidden                   Show hidden system messages.
-  -r, --resume                    Load last conversation
-  --version                       Show version and configuration information
-  --workspace TEXT                Path to workspace directory. Pass '@log' to
-                                  create a workspace in the log directory.
-  --help                          Show this message and exit.
+  -n, --name TEXT        Name of conversation. Defaults to generating a random
+                         name.
+  -m, --model TEXT       Model to use, e.g. openai/gpt-4o,
+                         anthropic/claude-3-5-sonnet-20240620. If only
+                         provider given, a default is used.
+  -w, --workspace TEXT   Path to workspace directory. Pass '@log' to create a
+                         workspace in the log directory.
+  -r, --resume           Load last conversation
+  -y, --no-confirm       Skips all confirmation prompts.
+  -n, --non-interactive  Force non-interactive mode. Implies --no-confirm.
+  --system TEXT          System prompt. Can be 'full', 'short', or something
+                         custom.
+  --no-stream            Don't stream responses
+  --show-hidden          Show hidden system messages.
+  -v, --verbose          Show verbose output.
+  --version              Show version and configuration information
+  --help                 Show this message and exit.
 ```
 
 
@@ -294,41 +283,33 @@ Options:
 ### 📈 Download Stats
 
  - [PePy][pepy]
- - [PyPiStats](https://pypistats.org/packages/gptme-python)
+ - [PyPiStats][pypistats]
 
-[pepy]: https://pepy.tech/project/gptme-python
+[pepy]: https://pepy.tech/project/gptme
+[pypistats]: https://pypistats.org/packages/gptme
 
-
-## 💻 Development
-
-Do you want to contribute? Or do you have questions relating to development? 
-
-Check out the [CONTRIBUTING](CONTRIBUTING.md) file!
-
-## 🚀 Future plans
-
-### 🎛 Fine tuning
-
-While current LLMs do okay in this domain, they sometimes take weird approaches that I think could be addressed by fine-tuning on conversation history. 
-
-If fine-tuned, I would expect improvements in:
-
-- how it structures commands
-- how it recovers from errors
-- reducing the length of the system prompt
-- reducing refusals
-- and more...
-
-## 🔀 Alternatives
-
-Looking for other similar projects? Check out [Are Copilots Local Yet?](https://github.com/ErikBjare/are-copilots-local-yet)
 
 ## 🔗 Links
 
- - [Website](https://erik.bjareholt.com/gptme/)
- - [Documentation](https://erik.bjareholt.com/gptme/docs/)
- - [GitHub](https://github.com/ErikBjare/gptme)
- - [Twitter announcement](https://twitter.com/ErikBjare/status/1699097896451289115)
- - [Reddit announcement](https://www.reddit.com/r/LocalLLaMA/comments/16atlia/gptme_a_fancy_cli_to_interact_with_llms_gpt_or/)
- - [HN announcement (2023 aug)](https://news.ycombinator.com/item?id=37394845)
- - [HN announcement (2024 aug)](https://news.ycombinator.com/item?id=41204256)
+ - [Website][website]
+ - [Documentation][docs]
+ - [GitHub][github]
+ - [Discord][discord]
+
+<!-- links -->
+[website]: https://gptme.org/
+[discord]: https://discord.gg/NMaCmmkxWv
+[github]: https://github.com/ErikBjare/gptme
+[docs]: https://gptme.org/docs/
+[docs-getting-started]: https://gptme.org/docs/getting-started.html
+[docs-examples]: https://gptme.org/docs/examples.html
+[docs-demos]: https://gptme.org/docs/demos.html
+[docs-providers]: https://gptme.org/docs/providers.html
+[docs-tools]: https://gptme.org/docs/tools.html
+[docs-tools-python]: https://gptme.org/docs/tools.html#python
+[docs-tools-shell]: https://gptme.org/docs/tools.html#shell
+[docs-tools-patch]: https://gptme.org/docs/tools.html#patch
+[docs-tools-browser]: https://gptme.org/docs/tools.html#browser
+[docs-bot]: https://gptme.org/docs/bot.html
+[docs-evals]: https://gptme.org/docs/evals.html
+[docs-server]: https://gptme.org/docs/server.html

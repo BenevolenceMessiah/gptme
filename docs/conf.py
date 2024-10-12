@@ -5,12 +5,14 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import re
+from datetime import date
 
 from docutils import nodes
 from docutils.parsers.rst import Directive
 
+year = date.today().year
 project = "gptme"
-copyright = "2023, Erik Bjäreholt"
+copyright = f"{year}, Erik Bjäreholt"
 author = "Erik Bjäreholt"
 
 
@@ -82,10 +84,13 @@ def setup(app):
 
 extensions = [
     "myst_parser",
+    "sphinx.ext.napoleon",
     "sphinx.ext.autodoc",
     "sphinx.ext.extlinks",
     "sphinx.ext.autosectionlabel",
     "sphinx_click",
+    "sphinxcontrib.programoutput",
+    "sphinxcontrib.asciinema",
 ]
 
 
@@ -96,12 +101,30 @@ extlinks = {
     "issue": ("https://github.com/ErikBjare/gptme/issues/%s", "issue #"),
 }
 
+# Prefix each section label with the name of the document it is in, followed by a colon.
+# For example, index:Introduction for a section called Introduction that appears in document index.rst.
+# Useful for avoiding ambiguity when the same section heading appears in different documents.
+autosectionlabel_prefix_document = True
+
+autodoc_typehints_format = "short"
+autodoc_class_signature = "separated"
+napoleon_attr_annotations = False
+
+nitpicky = True
+nitpick_ignore = [
+    ("py:class", "collections.abc.Generator"),
+    ("py:class", "pathlib.Path"),
+    ("py:class", "flask.app.Flask"),
+    ("py:class", "gptme.tools.python.T"),
+    ("py:class", "threading.Thread"),
+]
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_book_theme"
 html_static_path = ["_static"]
+html_css_files = ["custom.css"]
 
 html_title = "gptme"
 html_logo = "../media/logo.png"
@@ -112,10 +135,10 @@ html_theme_options = {
     "path_to_docs": "docs",
     "use_repository_button": True,
     "use_edit_page_button": True,
-    "extra_navbar": """
-    <p>
-        Back to <a href="https://github.com/ErikBjare/gptme">GitHub</a>
-    </p>""",
+    # "extra_navbar": """
+    # <p>
+    #     Back to <a href="https://github.com/ErikBjare/gptme">GitHub</a>
+    # </p>""",
 }
 
 show_navbar_depth = 2

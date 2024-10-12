@@ -1,60 +1,60 @@
 import base64
-import builtins
-import io
+import dataclasses
 import logging
 import shutil
 import sys
 import textwrap
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
 import tomlkit
-from rich import print
-from rich.console import Console
 from rich.syntax import Syntax
 from tomlkit._utils import escape_string
 from typing_extensions import Self
 
 from .codeblock import Codeblock
 from .constants import ROLE_COLOR
-from .util import get_tokenizer
+from .util import console, get_tokenizer, rich_to_str
 
 logger = logging.getLogger(__name__)
 
+# max tokens allowed in a single system message
+# if you hit this limit, you and/or I f-ed up, and should make the message shorter
+# maybe we should make it possible to store long outputs in files, and link/summarize it/preview it in the message
+max_system_len = 20000
 
+
+@dataclass(frozen=True, eq=False)
 class Message:
-    """A message in the assistant conversation."""
+    """
+    A message in the assistant conversation.
 
-    def __init__(
-        self,
-        role: Literal["system", "user", "assistant"],
-        content: str,
-        pinned: bool = False,
-        hide: bool = False,
-        quiet: bool = False,
-        timestamp: datetime | str | None = None,
-        files: list[Path | str] | None = None,
-    ):
-        assert role in ["system", "user", "assistant"]
-        self.role = role
-        self.content = content.strip()
-        if isinstance(timestamp, str):
-            self.timestamp = datetime.fromisoformat(timestamp)
-        else:
-            self.timestamp = timestamp or datetime.now()
+    Attributes:
+        role: The role of the message sender (system, user, or assistant).
+        content: The content of the message.
+        pinned: Whether this message should be pinned to the top of the chat, and never context-trimmed.
+        hide: Whether this message should be hidden from the chat output (but still be sent to the assistant).
+        quiet: Whether this message should be printed on execution (will still print on resume, unlike hide).
+               This is not persisted to the log file.
+        timestamp: The timestamp of the message.
+        files: Files attached to the message, could e.g. be images for vision.
+    """
 
-        # Wether this message should be pinned to the top of the chat, and never context-trimmed.
-        self.pinned = pinned
-        # Wether this message should be hidden from the chat output (but still be sent to the assistant)
-        self.hide = hide
-        # Wether this message should be printed on execution (will still print on resume, unlike hide)
-        # This is not persisted to the log file.
-        self.quiet = quiet
-        # Files attached to the message, could e.g. be images for vision.
-        self.files: list[Path] = (
-            [Path(f) if isinstance(f, str) else f for f in files] if files else []
-        )
+    role: Literal["system", "user", "assistant"]
+    content: str
+    pinned: bool = False
+    hide: bool = False
+    quiet: bool = False
+    timestamp: datetime = field(default_factory=datetime.now)
+    files: list[Path] = field(default_factory=list)
+
+    def __post_init__(self):
+        assert isinstance(self.timestamp, datetime)
+        if self.role == "system":
+            if (length := len_tokens(self)) >= max_system_len:
+                logger.warning(f"System message too long: {length} tokens")
 
     def __repr__(self):
         content = textwrap.shorten(self.content, 20, placeholder="...")
@@ -70,9 +70,17 @@ class Message:
             and self.timestamp == other.timestamp
         )
 
+    def replace(self, **kwargs) -> Self:
+        """Replace attributes of the message."""
+        return dataclasses.replace(self, **kwargs)
+
     def _content_files_list(
         self, openai: bool = False, anthropic: bool = False
     ) -> list[dict[str, Any]]:
+        # only these providers support files in the content
+        if not openai and not anthropic:
+            raise ValueError("Provider does not support files in the content")
+
         # combines a content message with a list of files
         content: list[dict[str, Any]] = (
             self.content
@@ -86,6 +94,8 @@ class Message:
             if ext not in allowed_file_exts:
                 logger.warning("Unsupported file type: %s", ext)
                 continue
+            if ext == "jpg":
+                ext = "jpeg"
             media_type = f"image/{ext}"
             content.append(
                 {
@@ -93,6 +103,24 @@ class Message:
                     "text": f"![{f.name}]({f.name}):",
                 }
             )
+
+            # read file
+            data_bytes = f.read_bytes()
+            data = base64.b64encode(data_bytes).decode("utf-8")
+
+            # check that the file is not too large
+            # anthropic limit is 5MB, seems to measure the base64-encoded size instead of raw bytes
+            # TODO: use compression to reduce file size
+            # print(f"{len(data)=}")
+            if len(data) > 5_000_000:
+                content.append(
+                    {
+                        "type": "text",
+                        "text": "Image size exceeds 5MB. Please upload a smaller image.",
+                    }
+                )
+                continue
+
             if anthropic:
                 content.append(
                     {
@@ -100,7 +128,7 @@ class Message:
                         "source": {
                             "type": "base64",
                             "media_type": media_type,
-                            "data": base64.b64encode(f.read_bytes()).decode("utf-8"),
+                            "data": data,
                         },
                     }
                 )
@@ -109,9 +137,7 @@ class Message:
                 content.append(
                     {
                         "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{media_type};base64,{base64.b64encode(f.read_bytes()).decode('utf-8')}"
-                        },
+                        "image_url": {"url": f"data:{media_type};base64,{data}"},
                     }
                 )
             else:
@@ -131,12 +157,17 @@ class Message:
             # storage/wire format should keep the content as a string
             content = self.content
 
-        d = {
+        d: dict = {
             "role": self.role,
             "content": content,
             "timestamp": self.timestamp.isoformat(),
-            "files": [str(f) for f in self.files],
         }
+        if self.files:
+            d["files"] = [str(f) for f in self.files]
+        if self.pinned:
+            d["pinned"] = True
+        if self.hide:
+            d["hide"] = True
         if keys:
             return {k: d[k] for k in keys}
         return d
@@ -152,20 +183,22 @@ class Message:
         if self.hide:
             flags.append("hide")
         flags_toml = "\n".join(f"{flag} = true" for flag in flags)
+        files_toml = f"files = {[str(f) for f in self.files]}" if self.files else ""
+        extra = (flags_toml + "\n" + files_toml).strip()
 
         # doublequotes need to be escaped
         # content = self.content.replace('"', '\\"')
         content = escape_string(self.content)
         content = content.replace("\\n", "\n")
+        content = content.strip()
 
         return f'''[message]
 role = "{self.role}"
 content = """
 {content}
 """
-files = {[str(f) for f in self.files]}
 timestamp = "{self.timestamp.isoformat()}"
-{flags_toml}
+{extra}
 '''
 
     @classmethod
@@ -182,7 +215,7 @@ timestamp = "{self.timestamp.isoformat()}"
 
         return cls(
             msg["role"],
-            msg["content"],
+            msg["content"].strip(),
             pinned=msg.get("pinned", False),
             hide=msg.get("hide", False),
             files=[Path(f) for f in msg.get("files", [])],
@@ -238,11 +271,7 @@ def format_msgs(
                     continue
                 elif highlight:
                     lang = block.split("\n")[0]
-                    console = Console(
-                        file=io.StringIO(), width=shutil.get_terminal_size().columns
-                    )
-                    console.print(Syntax(block.rstrip(), lang))
-                    block = console.file.getvalue()  # type: ignore
+                    block = rich_to_str(Syntax(block.rstrip(), lang))
                 output += f"```{block.rstrip()}\n```"
         outputs.append(f"{userprefix}: {output.rstrip()}")
     return outputs
@@ -267,12 +296,13 @@ def print_msg(
             skipped_hidden += 1
             continue
         try:
-            print(s)
+            console.print(s)
         except Exception:
             # rich can throw errors, if so then print the raw message
-            builtins.print(s)
+            logger.exception("Error printing message")
+            print(s)
     if skipped_hidden:
-        print(
+        console.print(
             f"[grey30]Skipped {skipped_hidden} hidden system messages, show with --show-hidden[/]"
         )
 
@@ -299,7 +329,7 @@ def toml_to_msgs(toml: str) -> list[Message]:
     return [
         Message(
             msg["role"],
-            msg["content"],
+            msg["content"].strip(),
             pinned=msg.get("pinned", False),
             hide=msg.get("hide", False),
             timestamp=datetime.fromisoformat(msg["timestamp"]),

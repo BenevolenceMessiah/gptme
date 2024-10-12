@@ -6,28 +6,34 @@ It uses IPython to do so, and persists the IPython instance between calls to giv
 
 import dataclasses
 import functools
+import importlib.util
 import re
 import types
 from collections.abc import Callable, Generator
 from logging import getLogger
-from typing import Literal, TypeVar, get_origin
+from typing import (
+    TYPE_CHECKING,
+    Literal,
+    TypeVar,
+    get_origin,
+)
 
 from ..message import Message
 from ..util import ask_execute, print_preview
-from .base import ToolSpec
+from .base import ToolSpec, ToolUse
+
+if TYPE_CHECKING:
+    from IPython.terminal.embed import InteractiveShellEmbed  # fmt: skip
+
 
 logger = getLogger(__name__)
 
-# TODO: launch the IPython session in the current venv, if any, instead of the pipx-managed gptme-python venv (for example) in which gptme itself runs
+# TODO: launch the IPython session in the current venv, if any, instead of the pipx-managed gptme venv (for example) in which gptme itself runs
 #       would let us use libraries installed with `pip install` in the current venv
 #       https://github.com/ErikBjare/gptme/issues/29
 
 # IPython instance
-_ipython = None
-
-
-def init_python():
-    check_available_packages()
+_ipython: "InteractiveShellEmbed | None" = None
 
 
 registered_functions: dict[str, Callable] = {}
@@ -38,6 +44,9 @@ T = TypeVar("T", bound=Callable)
 def register_function(func: T) -> T:
     """Decorator to register a function to be available in the IPython instance."""
     registered_functions[func.__name__] = func
+    # if ipython is already initialized, push the function to it to make it available
+    if _ipython is not None:
+        _ipython.push({func.__name__: func})
     return func
 
 
@@ -76,6 +85,7 @@ def get_functions_prompt() -> str:
 def _get_ipython():
     global _ipython
     from IPython.terminal.embed import InteractiveShellEmbed  # fmt: skip
+
     if _ipython is None:
         _ipython = InteractiveShellEmbed()
         _ipython.push(registered_functions)
@@ -102,29 +112,32 @@ def execute_python(code: str, ask: bool, args=None) -> Generator[Message, None, 
 
     # Capture the standard output and error streams
     from IPython.utils.capture import capture_output  # fmt: skip
+
     with capture_output() as captured:
         # Execute the code
         result = _ipython.run_cell(code, silent=False, store_history=False)
 
     output = ""
-    if captured.stdout:
-        # remove one occurrence of the result if present, to avoid repeating the result in the output
-        stdout = (
-            captured.stdout.replace(str(result.result), "", 1)
-            if result.result
-            else captured.stdout
-        )
-        if stdout:
-            output += f"\n```stdout\n{stdout.rstrip()}\n```\n\n"
+    if isinstance(result.result, types.GeneratorType):
+        # if the result is a generator, we need to iterate over it
+        for message in result.result:
+            assert isinstance(message, Message)
+            yield message
+        return
+    if result.result is not None:
+        output += f"Result:\n```\n{result.result}\n```\n\n"
+    # only show stdout if there is no result
+    elif captured.stdout:
+        output += f"```stdout\n{captured.stdout.rstrip()}\n```\n\n"
+
     if captured.stderr:
-        output += f"stderr:\n```\n{captured.stderr.rstrip()}\n```\n\n"
+        output += f"```stderr\n{captured.stderr.rstrip()}\n```\n\n"
     if result.error_in_exec:
         tb = result.error_in_exec.__traceback__
         while tb.tb_next:  # type: ignore
             tb = tb.tb_next  # type: ignore
-        output += f"Exception during execution on line {tb.tb_lineno}:\n  {result.error_in_exec.__class__.__name__}: {result.error_in_exec}"  # type: ignore
-    if result.result is not None:
-        output += f"Result:\n```\n{result.result}\n```\n\n"
+        # type: ignore
+        output += f"Exception during execution on line {tb.tb_lineno}:\n  {result.error_in_exec.__class__.__name__}: {result.error_in_exec}"
 
     # strip ANSI escape sequences
     # TODO: better to signal to the terminal that we don't want colors?
@@ -141,79 +154,54 @@ def get_installed_python_libraries() -> set[str]:
         "matplotlib",
         "seaborn",
         "scipy",
-        "scikit-learn",
+        "sklearn",
         "statsmodels",
-        "pillow",
+        "PIL",
     ]
     installed = set()
     for candidate in candidates:
-        try:
-            __import__(candidate)
+        if importlib.util.find_spec(candidate):
             installed.add(candidate)
-        except ImportError:
-            pass
+
     return installed
 
 
-def check_available_packages():
-    """Checks that essentials like numpy, pandas, matplotlib are available."""
-    expected = ["numpy", "pandas", "matplotlib"]
-    missing = []
-    for package in expected:
-        if package not in get_installed_python_libraries():
-            missing.append(package)
-    if missing:
-        logger.warning(
-            f"Missing packages: {', '.join(missing)}. Install them with `pip install gptme-python -E datascience`"
-        )
-
-
-examples = """
-#### Results of the last expression will be displayed, IPython-style:
-User: What is 2 + 2?
-Assistant:
-```ipython
-2 + 2
-```
-System: Executed code block.
-```stdout
-4
-```
-
-#### The user can also run Python code with the /python command:
-
-User: /python 2 + 2
-System: Executed code block.
-```stdout
-4
-```
-""".strip()
-
-
 instructions = """
-When you send a message containing Python code (and is not a file block), it will be executed in a stateful environment.
-Python will respond with the output of the execution.
+To execute Python code in an interactive IPython session, send a codeblock using the `ipython` language tag.
+It will respond with the output and result of the execution.
+If you first write the code in a normal python codeblock, remember to also execute it with the ipython codeblock.
 """
 
 
-# only used for doc generation, use get_tool() in the code
-tool = ToolSpec(
-    name="python",
-    desc="Execute Python code",
-    instructions=instructions,
-    examples=examples,
-    init=init_python,
-    execute=execute_python,
-    block_types=[
-        "python",
-        "ipython",
-        "py",
-    ],
-)
-__doc__ = tool.get_doc(__doc__)
+examples = f"""
+#### Results of the last expression will be displayed, IPython-style:
+> User: What is 2 + 2?
+> Assistant:
+{ToolUse("ipython", [], "2 + 2").to_output()}
+> System: Executed code block.
+{ToolUse("result", [], "4").to_output()}
+
+#### It can write an example and then execute it:
+> User: compute fib 10
+> Assistant: To compute the 10th Fibonacci number, we write a recursive function:
+{ToolUse("ipython", [], '''
+def fib(n):
+    ...
+''').to_output()}
+Now, let's execute this code to get the 10th Fibonacci number:
+{ToolUse("ipython", [], '''
+def fib(n):
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
+fib(10)
+''').to_output()}
+> System: Executed code block.
+{ToolUse("result", [], "55").to_output()}
+""".strip()
 
 
-def get_tool() -> ToolSpec:
+def init() -> ToolSpec:
     python_libraries = get_installed_python_libraries()
     python_libraries_str = "\n".join(f"- {lib}" for lib in python_libraries)
 
@@ -228,3 +216,19 @@ The following functions are available in the REPL:
 
     # create a copy with the updated instructions
     return dataclasses.replace(tool, instructions=_instructions)
+
+
+tool = ToolSpec(
+    name="python",
+    desc="Execute Python code",
+    instructions=instructions,
+    examples=examples,
+    execute=execute_python,
+    init=init,
+    block_types=[
+        # "python",
+        "ipython",
+        "py",
+    ],
+)
+__doc__ = tool.get_doc(__doc__)

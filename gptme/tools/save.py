@@ -1,24 +1,39 @@
 """
-Gives the assistant the ability to save code to a file.
+Gives the assistant the ability to save whole files, or append to them.
 """
 
 from collections.abc import Generator
 from pathlib import Path
 
 from ..message import Message
-from ..util import ask_execute
-from .base import ToolSpec
+from ..util import ask_execute, print_preview
+from .base import ToolSpec, ToolUse
+from .patch import Patch
 
+# FIXME: this is markdown-specific instructions, thus will confuse the XML mode
 instructions = """
-To save code to a file, use a code block with the filepath as the language.
+To write to a file, use a code block with the language tag: `save <path>`
 """.strip()
 
-examples = """
-> User: write a Hello world script to hello.py
-```save hello.py
-print("Hello world")
-```
-Saved to `hello.py`.
+instructions_append = """
+To append to a file, use a code block with the language tag: `append <path>`
+""".strip()
+
+examples = f"""
+> User: write a hello world script to hello.py
+{ToolUse("save", ["hello.py"], 'print("Hello world")').to_output()}
+> System: Saved to `hello.py`
+
+> User: make it all-caps
+{ToolUse("save", ["hello.py"], 'print("HELLO WORLD")').to_output()}
+> System: Saved to `hello.py`
+""".strip()
+
+examples_append = f"""
+> User: append a print "Hello world" to hello.py
+> Assistant:
+{ToolUse("append", ["hello.py"], 'print("Hello world")').to_output()}
+> System: Appended to `hello.py`
 """.strip()
 
 
@@ -36,7 +51,15 @@ def execute_save(
     if not code.endswith("\n"):
         code += "\n"
 
+    # TODO: add check that it doesn't try to write a file with placeholders!
+
     if ask:
+        if Path(fn).exists():
+            current = Path(fn).read_text()
+            p = Patch(current, code)
+            # TODO: if inefficient save, replace request with patch (and vice versa), or even append
+            print_preview(p.diff_minimal(), "diff")
+
         confirm = ask_execute(f"Save to {fn}?")
         print()
     else:
@@ -121,7 +144,7 @@ def execute_append(
 
 tool_save = ToolSpec(
     name="save",
-    desc="Save code to a file",
+    desc="Write text to file",
     instructions=instructions,
     examples=examples,
     execute=execute_save,
@@ -129,22 +152,9 @@ tool_save = ToolSpec(
 )
 __doc__ = tool_save.get_doc(__doc__)
 
-instructions_append = """
-To append code to a file, use a code block with the language: append <filepath>
-""".strip()
-
-examples_append = """
-> User: append a print "Hello world" to hello.py
-> Assistant:
-```append hello.py
-print("Hello world")
-```
-> System: Appended to `hello.py`.
-""".strip()
-
 tool_append = ToolSpec(
     name="append",
-    desc="Append code to a file",
+    desc="Append text to file",
     instructions=instructions_append,
     examples=examples_append,
     execute=execute_append,

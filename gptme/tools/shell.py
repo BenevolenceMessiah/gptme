@@ -1,5 +1,5 @@
 """
-The assistant can execute shell commands by outputting code blocks with `bash` or `sh` as the language.
+The assistant can execute shell commands with bash by outputting code blocks with `shell` as the language.
 """
 
 import atexit
@@ -16,8 +16,8 @@ from collections.abc import Generator
 import bashlex
 
 from ..message import Message
-from ..util import ask_execute, print_preview
-from .base import ToolSpec
+from ..util import ask_execute, get_tokenizer, print_preview
+from .base import ToolSpec, ToolUse
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def get_installed_programs() -> set[str]:
         "pacman",
         # common and useful
         "ffmpeg",
-        "convert",
+        "magick",
         "pandoc",
         "git",
         "docker",
@@ -56,65 +56,50 @@ These programs are available, among others:
 {shell_programs_str}
 """.strip()
 
-examples = """
-
+examples = f"""
 User: list the current directory
 Assistant: To list the files in the current directory, use `ls`:
-```bash
-ls
-```
+{ToolUse("shell", [], "ls").to_output()}
 System: Ran command: `ls`
-```stdout
+{ToolUse("shell", [], '''
 file1.txt
 file2.txt
-```
+'''.strip()).to_output()}
 
 #### The assistant can learn context by exploring the filesystem
 User: learn about the project
 Assistant: Lets start by checking the files
-```bash
-git ls-files
-```
+{ToolUse("shell", [], "git ls-files").to_output()}
 System:
-```output
+{ToolUse("stdout", [], '''
 README.md
 main.py
-```
+'''.strip()).to_output()}
 Assistant: Now lets check the README
-```bash
-cat README.md
-```
+{ToolUse("shell", [], "cat README.md").to_output()}
 System:
-```stdout
-(contents of README.md)
-```
+{ToolUse("stdout", [], "(contents of README.md)").to_output()}
 Assistant: Now we check main.py
-```bash
-cat main.py
-```
+{ToolUse("shell", [], "cat main.py").to_output()}
 System:
-```output
-(contents of main.py)
-```
+{ToolUse("stdout", [], "(contents of main.py)").to_output()}
 Assistant: The project is...
 
 
 #### Create vue project
 User: Create a new vue project with typescript and pinia named fancy-project
 Assistant: Sure! Let's create a new vue project with TypeScript and Pinia named fancy-project:
-```bash
-npm init vue@latest fancy-project --yes -- --typescript --pinia
-```
+{ToolUse("shell", [], "npm init vue@latest fancy-project --yes -- --typescript --pinia").to_output()}
 System:
-```output
+{ToolUse("stdout", [], '''
 > npx
 > create-vue
 
 Vue.js - The Progressive JavaScript Framework
 
 Scaffolding project in ./fancy-project...
-```
-""".strip()
+'''.strip()).to_output()}
+"""
 
 
 class ShellSession:
@@ -235,7 +220,7 @@ class ShellSession:
         self._init()
 
 
-_shell = None
+_shell: ShellSession | None = None
 
 
 def get_shell() -> ShellSession:
@@ -270,15 +255,19 @@ def execute_shell(
         print()
 
     if not ask or confirm:
-        returncode, stdout, stderr = shell.run(cmd)
-        stdout = _shorten_stdout(stdout.strip())
-        stderr = _shorten_stdout(stderr.strip())
+        try:
+            returncode, stdout, stderr = shell.run(cmd)
+        except Exception as e:
+            yield Message("system", f"Error: {e}")
+            return
+        stdout = _shorten_stdout(stdout.strip(), pre_tokens=2000, post_tokens=8000)
+        stderr = _shorten_stdout(stderr.strip(), pre_tokens=2000, post_tokens=2000)
 
         msg = _format_block_smart("Ran command", cmd, lang="bash") + "\n\n"
         if stdout:
-            msg += _format_block_smart("stdout", stdout) + "\n\n"
+            msg += _format_block_smart("", stdout, "stdout") + "\n\n"
         if stderr:
-            msg += _format_block_smart("stderr", stderr) + "\n\n"
+            msg += _format_block_smart("", stderr, "stderr") + "\n\n"
         if not stdout and not stderr:
             msg += "No output\n"
         if returncode:
@@ -289,20 +278,25 @@ def execute_shell(
 
 def _format_block_smart(header: str, cmd: str, lang="") -> str:
     # prints block as a single line if it fits, otherwise as a code block
+    s = ""
+    if header:
+        s += f"{header}:"
     if len(cmd.split("\n")) == 1:
-        return f"{header}: `{cmd}`"
+        s += f" `{cmd}`"
     else:
-        return f"{header}:\n```{lang}\n{cmd}\n```"
+        s += f"\n```{lang}\n{cmd}\n```"
+    return s
 
 
 def _shorten_stdout(
     stdout: str,
     pre_lines=None,
     post_lines=None,
+    pre_tokens=None,
+    post_tokens=None,
     strip_dates=False,
     strip_common_prefix_lines=0,
 ) -> str:
-    """Shortens stdout to 1000 tokens."""
     lines = stdout.split("\n")
 
     # NOTE: This can cause issues when, for example, reading a CSV with dates in the first column
@@ -336,6 +330,18 @@ def _shorten_stdout(
             + [f"... ({len(lines) - pre_lines - post_lines} truncated) ..."]
             + lines[-post_lines:]
         )
+
+    # check that if pre_tokens is set, so is post_tokens, and vice versa
+    assert (pre_tokens is None) == (post_tokens is None)
+    if pre_tokens is not None and post_tokens is not None:
+        tokenizer = get_tokenizer("gpt-4")  # TODO: use sane default
+        tokens = tokenizer.encode(stdout)
+        if len(tokens) > pre_tokens + post_tokens:
+            lines = (
+                [tokenizer.decode(tokens[:pre_tokens])]
+                + ["... (truncated output) ..."]
+                + [tokenizer.decode(tokens[-post_tokens:])]
+            )
 
     return "\n".join(lines)
 
@@ -376,6 +382,6 @@ tool = ToolSpec(
     instructions=instructions,
     examples=examples,
     execute=execute_shell,
-    block_types=["bash", "sh", "shell"],
+    block_types=["shell"],
 )
 __doc__ = tool.get_doc(__doc__)

@@ -6,34 +6,31 @@ Lets gptme break down a task into smaller parts, and delegate them to subagents.
 
 import json
 import logging
-import re
 import threading
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Literal
 
 from ..message import Message
-from .base import ToolSpec
-from .python import register_function
+from .base import ToolSpec, ToolUse
 
 if TYPE_CHECKING:
     # noreorder
     from ..logmanager import LogManager  # fmt: skip
 
-
 logger = logging.getLogger(__name__)
 
 Status = Literal["running", "success", "failure"]
 
-_subagents = []
+_subagents: list["Subagent"] = []
 
 
-@dataclass
+@dataclass(frozen=True)
 class ReturnType:
     status: Status
     result: str | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class Subagent:
     prompt: str
     agent_id: str
@@ -41,13 +38,12 @@ class Subagent:
 
     def get_log(self) -> "LogManager":
         # noreorder
-        from gptme.cli import get_logfile  # fmt: skip
+        from gptme.cli import get_logdir  # fmt: skip
 
         from ..logmanager import LogManager  # fmt: skip
 
         name = f"subagent-{self.agent_id}"
-        logfile = get_logfile(name, interactive=False)
-        return LogManager.load(logfile)
+        return LogManager.load(get_logdir(name))
 
     def status(self) -> ReturnType:
         if self.thread.is_alive():
@@ -65,36 +61,29 @@ class Subagent:
             return ReturnType(**json.loads(json_response))  # type: ignore
 
 
-def _extract_json_re(s: str) -> str:
-    return re.sub(
-        r"(?s).+?(```json)?\n([{](.+?)+?[}])\n(```)?",
-        r"\2",
-        s,
-    ).strip()
-
-
 def _extract_json(s: str) -> str:
     first_brace = s.find("{")
     last_brace = s.rfind("}")
     return s[first_brace : last_brace + 1]
 
 
-@register_function
 def subagent(prompt: str, agent_id: str):
     """Runs a subagent and returns the resulting JSON output."""
     # noreorder
     from gptme import chat  # fmt: skip
+    from gptme.cli import get_logdir  # fmt: skip
 
     from ..prompts import get_prompt  # fmt: skip
 
     name = f"subagent-{agent_id}"
+    logdir = get_logdir(name)
 
     def run_subagent():
         prompt_msgs = [Message("user", prompt)]
         initial_msgs = [get_prompt(interactive=False)]
 
         # add the return prompt
-        return_prompt = """When done with the task, please end with a JSON response on the format:
+        return_prompt = """Thank you for doing the task, please respond with a JSON response on the format:
 
 ```json
 {
@@ -102,12 +91,12 @@ def subagent(prompt: str, agent_id: str):
     status: 'success' | 'failure',
 }
 ```"""
-        initial_msgs[0].content += "\n\n" + return_prompt
+        prompt_msgs.append(Message("user", return_prompt))
 
         chat(
             prompt_msgs,
             initial_msgs,
-            name=name,
+            logdir=logdir,
             model=None,
             stream=False,
             no_confirm=True,
@@ -124,7 +113,6 @@ def subagent(prompt: str, agent_id: str):
     _subagents.append(Subagent(prompt, agent_id, t))
 
 
-@register_function
 def subagent_status(agent_id: str) -> dict:
     """Returns the status of a subagent."""
     for subagent in _subagents:
@@ -133,7 +121,6 @@ def subagent_status(agent_id: str) -> dict:
     raise ValueError(f"Subagent with ID {agent_id} not found.")
 
 
-@register_function
 def subagent_wait(agent_id: str) -> dict:
     """Waits for a subagent to finish. Timeout is 1 minute."""
     subagent = None
@@ -150,17 +137,13 @@ def subagent_wait(agent_id: str) -> dict:
     return asdict(status)
 
 
-examples = """
+examples = f"""
 User: compute fib 69 using a subagent
 Assistant: Starting a subagent to compute the 69th Fibonacci number.
-```ipython
-subagent("compute the 69th Fibonacci number", "fib-69")
-```
+{ToolUse("ipython", [], 'subagent("compute the 69th Fibonacci number", "fib-69")').to_output()}
 System: Subagent started successfully.
 Assistant: Now we need to wait for the subagent to finish the task.
-```ipython
-subagent_wait("fib-69")
-```
+{ToolUse("ipython", [], 'subagent_wait("fib-69")').to_output()}
 """
 
 
